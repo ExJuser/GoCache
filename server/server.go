@@ -3,29 +3,17 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"github.com/ExJuser/GoCache"
+	"github.com/gin-gonic/gin"
 	"log"
 	"os"
-)
-
-const (
-	// base HTTP paths.
-	apiVersion  = "v1"
-	apiBasePath = "/api/" + apiVersion + "/"
-
-	// path to cache.
-	cachePath      = apiBasePath + "cache/"
-	statsPath      = apiBasePath + "stats"
-	cacheClearPath = apiBasePath + "cache/clear"
-	// server version.
-	version = "1.0.0"
+	"strconv"
+	"time"
 )
 
 var (
 	port    int
 	logfile string
-	ver     bool
 
 	cache  *GoCache.GoCache
 	config = GoCache.Config{}
@@ -40,15 +28,10 @@ func init() {
 	flag.IntVar(&config.MaxEntrySize, "maxShardEntrySize", 500, "The maximum size of each object stored in a shard. Used only in initial memory allocation.")
 	flag.IntVar(&port, "port", 9090, "The port to listen on.")
 	flag.StringVar(&logfile, "logfile", "", "Location of the logfile.")
-	flag.BoolVar(&ver, "version", false, "Print server version.")
 }
 
 func main() {
 	flag.Parse()
-	if ver {
-		fmt.Printf("BigCache HTTP Server v%s", version)
-		os.Exit(0)
-	}
 
 	var logger *log.Logger
 
@@ -61,11 +44,36 @@ func main() {
 		}
 		logger = log.New(f, "", log.LstdFlags)
 	}
+
 	var err error
 	cache, err = GoCache.New(context.Background(), config)
 	if err != nil {
 		logger.Fatal(err)
 	}
-
 	logger.Print("cache initialised.")
+
+	r := gin.Default()
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		logger.Printf("%s request to %s took %vns.", c.Request.Method, c.Request.URL, time.Since(start).Nanoseconds())
+	})
+	r.GET("/api/v1/cache/:key", func(c *gin.Context) {
+
+	})
+	r.PUT("/api/v1/cache/:key", func(c *gin.Context) {
+
+	})
+	r.DELETE("/api/v1/cache/:key", func(c *gin.Context) {
+
+	})
+	r.GET("/api/v1/stats", func(c *gin.Context) {
+
+	})
+
+	strPort := ":" + strconv.Itoa(port)
+	logger.Printf("starting server on :%d", port)
+	if err = r.Run(strPort); err != nil {
+		logger.Print("server start failed.")
+	}
 }
