@@ -2,6 +2,8 @@ package queue
 
 import (
 	"encoding/binary"
+	"log"
+	"time"
 )
 
 const (
@@ -67,12 +69,64 @@ func NewBytesQueue(capacity int, maxCapacity int, verbose bool) *BytesQueue {
 }
 
 func (q *BytesQueue) Reset() {
-	// Just reset indexes
 	q.tail = leftMarginIndex
 	q.head = leftMarginIndex
 	q.rightMargin = leftMarginIndex
 	q.count = 0
 	q.full = false
+}
+
+func (q *BytesQueue) Push(data []byte) (int, error) {
+	neededSize := getNeededSize(len(data))
+
+	if !q.canInsertAfterTail(neededSize) {
+		if q.canInsertBeforeHead(neededSize) {
+			q.tail = leftMarginIndex
+		} else if q.capacity+neededSize >= q.maxCapacity && q.maxCapacity > 0 {
+			return -1, &queueError{"Full queue. Maximum size limit reached."}
+		} else {
+			q.allocateAdditionalMemory(neededSize)
+		}
+	}
+
+	index := q.tail
+
+	q.push(data, neededSize)
+
+	return index, nil
+}
+
+func (q *BytesQueue) allocateAdditionalMemory(minimum int) {
+	start := time.Now()
+	if q.capacity < minimum {
+		q.capacity += minimum
+	}
+	q.capacity = q.capacity * 2
+	if q.capacity > q.maxCapacity && q.maxCapacity > 0 {
+		q.capacity = q.maxCapacity
+	}
+
+	oldArray := q.array
+	q.array = make([]byte, q.capacity)
+
+	if leftMarginIndex != q.rightMargin {
+		copy(q.array, oldArray[:q.rightMargin])
+
+		if q.tail <= q.head {
+			if q.tail != q.head {
+				q.push(make([]byte, q.head-q.tail), q.head-q.tail)
+			}
+
+			q.head = leftMarginIndex
+			q.tail = q.rightMargin
+		}
+	}
+
+	q.full = false
+
+	if q.verbose {
+		log.Printf("Allocated new queue in %s; Capacity: %d \n", time.Since(start), q.capacity)
+	}
 }
 
 func (q *BytesQueue) push(data []byte, len int) {
@@ -117,6 +171,28 @@ func (q *BytesQueue) Pop() ([]byte, error) {
 	return data, nil
 }
 
+func (q *BytesQueue) Get(index int) ([]byte, error) {
+	data, _, err := q.peek(index)
+	return data, err
+}
+
+func (q *BytesQueue) CheckGet(index int) error {
+	return q.peekCheckErr(index)
+}
+
+func (q *BytesQueue) Capacity() int {
+	return q.capacity
+}
+
+func (q *BytesQueue) Len() int {
+	return q.count
+}
+
+func (q *BytesQueue) Peek() ([]byte, error) {
+	data, _, err := q.peek(q.head)
+	return data, err
+}
+
 func (q *BytesQueue) peek(index int) ([]byte, int, error) {
 	err := q.peekCheckErr(index)
 	if err != nil {
@@ -141,4 +217,25 @@ func (q *BytesQueue) peekCheckErr(index int) error {
 		return errIndexOutOfBounds
 	}
 	return nil
+}
+
+func (q *BytesQueue) canInsertAfterTail(need int) bool {
+	if q.full {
+		return false
+	}
+	if q.tail >= q.head {
+		return q.capacity-q.tail >= need
+	}
+	return q.head-q.tail == need || q.head-q.tail >= need+minimumHeaderSize
+}
+
+// canInsertBeforeHead returns true if it's possible to insert an entry of size of need before the head of the queue
+func (q *BytesQueue) canInsertBeforeHead(need int) bool {
+	if q.full {
+		return false
+	}
+	if q.tail >= q.head {
+		return q.head-leftMarginIndex == need || q.head-leftMarginIndex >= need+minimumHeaderSize
+	}
+	return q.head-q.tail == need || q.head-q.tail >= need+minimumHeaderSize
 }
