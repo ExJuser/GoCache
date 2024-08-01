@@ -10,7 +10,7 @@ const (
 	minimumEntriesInShard = 10
 )
 
-type BigCache struct {
+type GoCache struct {
 	shards     []*cacheShard
 	lifeWindow uint64
 	clock      clock
@@ -32,15 +32,15 @@ const (
 	Deleted = RemoveReason(3)
 )
 
-func New(ctx context.Context, config Config) (*BigCache, error) {
-	return newBigCache(ctx, config, &systemClock{})
+func New(ctx context.Context, config Config) (*GoCache, error) {
+	return newGoCache(ctx, config, &systemClock{})
 }
 
-func NewBigCache(config Config) (*BigCache, error) {
-	return newBigCache(context.Background(), config, &systemClock{})
+func NewGoCache(config Config) (*GoCache, error) {
+	return newGoCache(context.Background(), config, &systemClock{})
 }
 
-func newBigCache(ctx context.Context, config Config, clock clock) (*BigCache, error) {
+func newGoCache(ctx context.Context, config Config, clock clock) (*GoCache, error) {
 	if !isPowerOfTwo(config.Shards) {
 		return nil, errors.New("Shards number must be power of two")
 	}
@@ -63,7 +63,7 @@ func newBigCache(ctx context.Context, config Config, clock clock) (*BigCache, er
 		config.Hasher = newDefaultHasher()
 	}
 
-	cache := &BigCache{
+	cache := &GoCache{
 		shards:     make([]*cacheShard, config.Shards),
 		lifeWindow: lifeWindowSeconds,
 		clock:      clock,
@@ -108,56 +108,56 @@ func newBigCache(ctx context.Context, config Config, clock clock) (*BigCache, er
 	return cache, nil
 }
 
-func (c *BigCache) Close() error {
+func (c *GoCache) Close() error {
 	close(c.close)
 	return nil
 }
 
-func (c *BigCache) Get(key string) ([]byte, error) {
+func (c *GoCache) Get(key string) ([]byte, error) {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
 	return shard.get(key, hashedKey)
 }
 
-func (c *BigCache) GetWithInfo(key string) ([]byte, Response, error) {
+func (c *GoCache) GetWithInfo(key string) ([]byte, Response, error) {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
 	return shard.getWithInfo(key, hashedKey)
 }
 
-func (c *BigCache) Set(key string, entry []byte) error {
+func (c *GoCache) Set(key string, entry []byte) error {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
 	return shard.set(key, hashedKey, entry)
 }
 
-func (c *BigCache) Append(key string, entry []byte) error {
+func (c *GoCache) Append(key string, entry []byte) error {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
 	return shard.append(key, hashedKey, entry)
 }
 
-func (c *BigCache) Delete(key string) error {
+func (c *GoCache) Delete(key string) error {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
 	return shard.del(hashedKey)
 }
 
-func (c *BigCache) Reset() error {
+func (c *GoCache) Reset() error {
 	for _, shard := range c.shards {
 		shard.reset(c.config)
 	}
 	return nil
 }
 
-func (c *BigCache) ResetStats() error {
+func (c *GoCache) ResetStats() error {
 	for _, shard := range c.shards {
 		shard.resetStats()
 	}
 	return nil
 }
 
-func (c *BigCache) Len() int {
+func (c *GoCache) Len() int {
 	var len int
 	for _, shard := range c.shards {
 		len += shard.len()
@@ -165,7 +165,7 @@ func (c *BigCache) Len() int {
 	return len
 }
 
-func (c *BigCache) Capacity() int {
+func (c *GoCache) Capacity() int {
 	var len int
 	for _, shard := range c.shards {
 		len += shard.capacity()
@@ -173,7 +173,7 @@ func (c *BigCache) Capacity() int {
 	return len
 }
 
-func (c *BigCache) Stats() Stats {
+func (c *GoCache) Stats() Stats {
 	var s Stats
 	for _, shard := range c.shards {
 		tmp := shard.getStats()
@@ -186,17 +186,17 @@ func (c *BigCache) Stats() Stats {
 	return s
 }
 
-func (c *BigCache) KeyMetadata(key string) Metadata {
+func (c *GoCache) KeyMetadata(key string) Metadata {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
 	return shard.getKeyMetadataWithLock(hashedKey)
 }
 
-func (c *BigCache) Iterator() *EntryInfoIterator {
+func (c *GoCache) Iterator() *EntryInfoIterator {
 	return newIterator(c)
 }
 
-func (c *BigCache) onEvict(oldestEntry []byte, currentTimestamp uint64, evict func(reason RemoveReason) error) bool {
+func (c *GoCache) onEvict(oldestEntry []byte, currentTimestamp uint64, evict func(reason RemoveReason) error) bool {
 	oldestTimestamp := readTimestampFromEntry(oldestEntry)
 	if currentTimestamp < oldestTimestamp {
 		return false
@@ -208,30 +208,30 @@ func (c *BigCache) onEvict(oldestEntry []byte, currentTimestamp uint64, evict fu
 	return false
 }
 
-func (c *BigCache) cleanUp(currentTimestamp uint64) {
+func (c *GoCache) cleanUp(currentTimestamp uint64) {
 	for _, shard := range c.shards {
 		shard.cleanUp(currentTimestamp)
 	}
 }
 
-func (c *BigCache) getShard(hashedKey uint64) (shard *cacheShard) {
+func (c *GoCache) getShard(hashedKey uint64) (shard *cacheShard) {
 	return c.shards[hashedKey&c.shardMask]
 }
 
-func (c *BigCache) providedOnRemove(wrappedEntry []byte, reason RemoveReason) {
+func (c *GoCache) providedOnRemove(wrappedEntry []byte, reason RemoveReason) {
 	c.config.OnRemove(readKeyFromEntry(wrappedEntry), readEntry(wrappedEntry))
 }
 
-func (c *BigCache) providedOnRemoveWithReason(wrappedEntry []byte, reason RemoveReason) {
+func (c *GoCache) providedOnRemoveWithReason(wrappedEntry []byte, reason RemoveReason) {
 	if c.config.onRemoveFilter == 0 || (1<<uint(reason))&c.config.onRemoveFilter > 0 {
 		c.config.OnRemoveWithReason(readKeyFromEntry(wrappedEntry), readEntry(wrappedEntry), reason)
 	}
 }
 
-func (c *BigCache) notProvidedOnRemove(wrappedEntry []byte, reason RemoveReason) {
+func (c *GoCache) notProvidedOnRemove(wrappedEntry []byte, reason RemoveReason) {
 }
 
-func (c *BigCache) providedOnRemoveWithMetadata(wrappedEntry []byte, reason RemoveReason) {
+func (c *GoCache) providedOnRemoveWithMetadata(wrappedEntry []byte, reason RemoveReason) {
 	key := readKeyFromEntry(wrappedEntry)
 
 	hashedKey := c.hash.Sum64(key)
