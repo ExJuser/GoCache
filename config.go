@@ -49,30 +49,36 @@ type Config struct {
 	Logger Logger
 }
 
+// DefaultConfig 默认配置
 func DefaultConfig(eviction time.Duration) Config {
 	return Config{
-		Shards:             1024,
-		LifeWindow:         eviction,
-		CleanWindow:        time.Second,
+		Shards:             1024,        // 默认1024个分片
+		LifeWindow:         eviction,    //手动传入过期时间
+		CleanWindow:        time.Second, //默认一秒钟清理一次
 		MaxEntriesInWindow: 1000 * 10 * 60,
 		MaxEntrySize:       500,
-		StatsEnabled:       false,
-		Verbose:            true,
+		StatsEnabled:       false, //默认不开启数据记录
+		Verbose:            true,  //默认开启日志打印
 		Hasher:             newDefaultHasher(),
-		HardMaxCacheSize:   0,
+		HardMaxCacheSize:   0, //默认不开启内存限制
 		Logger:             DefaultLogger(),
 	}
 }
 
 func (c Config) initialShardSize() int {
+	//整个GoCache的最大键值对数量/分片总数=一个分片的平均最大键值对数量
+	//再与最小的单分片键值对数量取最大值确认初始的分片大小
 	return max(c.MaxEntriesInWindow/c.Shards, minimumEntriesInShard)
 }
 
 func (c Config) maximumShardSizeInBytes() int {
 	maxShardSize := 0
+	//如果开启了内存限制
 	if c.HardMaxCacheSize > 0 {
+		//单个分片的平均内存限制
 		maxShardSize = convertMBToBytes(c.HardMaxCacheSize) / c.Shards
 	}
+	//不开启内存限制的情况下默认为0
 	return maxShardSize
 }
 
@@ -84,6 +90,7 @@ func (c Config) OnRemoveFilterSet(reasons ...RemoveReason) Config {
 	return c
 }
 
+// 将MB转换为B
 func convertMBToBytes(value int) int {
 	return value * 1024 * 1024
 }
