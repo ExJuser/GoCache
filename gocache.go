@@ -10,16 +10,6 @@ const (
 	minimumEntriesInShard = 10
 )
 
-type GoCache struct {
-	shards     []*cacheShard
-	lifeWindow uint64
-	clock      clock
-	hash       Hasher
-	config     Config
-	shardMask  uint64
-	close      chan struct{}
-}
-
 type Response struct {
 	EntryStatus RemoveReason
 }
@@ -31,6 +21,16 @@ const (
 	NoSpace = RemoveReason(2)
 	Deleted = RemoveReason(3)
 )
+
+type GoCache struct {
+	shards     []*cacheShard
+	lifeWindow uint64
+	clock      clock
+	hash       Hasher
+	config     Config
+	shardMask  uint64
+	close      chan struct{}
+}
 
 func New(ctx context.Context, config Config) (*GoCache, error) {
 	return newGoCache(ctx, config, &systemClock{})
@@ -158,19 +158,19 @@ func (c *GoCache) ResetStats() error {
 }
 
 func (c *GoCache) Len() int {
-	var len int
+	var length int
 	for _, shard := range c.shards {
-		len += shard.len()
+		length += shard.len()
 	}
-	return len
+	return length
 }
 
 func (c *GoCache) Capacity() int {
-	var len int
+	var length int
 	for _, shard := range c.shards {
-		len += shard.capacity()
+		length += shard.capacity()
 	}
-	return len
+	return length
 }
 
 func (c *GoCache) Stats() Stats {

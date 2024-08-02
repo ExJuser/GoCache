@@ -17,6 +17,5 @@ func (f fnv64a) Sum64(key string) uint64 {
 		hash ^= uint64(key[i])
 		hash *= prime64
 	}
-
 	return hash
 }
