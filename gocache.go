@@ -143,14 +143,18 @@ func (c *GoCache) Delete(key string) error {
 	return shard.del(hashedKey)
 }
 
+// Reset 清空全部缓存
 func (c *GoCache) Reset() error {
+	//遍历每一个分片
 	for _, shard := range c.shards {
 		shard.reset(c.config)
 	}
 	return nil
 }
 
+// ResetStats 清空统计数据
 func (c *GoCache) ResetStats() error {
+	//遍历每一个分片
 	for _, shard := range c.shards {
 		shard.resetStats()
 	}

@@ -37,6 +37,7 @@ type cacheShard struct {
 	cleanEnabled bool
 }
 
+// 相比于get多返回了一个resp 包含了 RemoveReason
 func (s *cacheShard) getWithInfo(key string, hashedKey uint64) (entry []byte, resp Response, err error) {
 	currentTime := uint64(s.clock.Epoch())
 	s.lock.RLock()
@@ -134,10 +135,13 @@ func (s *cacheShard) set(key string, hashedKey uint64, entry []byte) error {
 
 	s.lock.Lock()
 
+	//对应的hashedKey在hashmap中已经存在 之前已经添加过
 	if previousIndex := s.hashmap[hashedKey]; previousIndex != 0 {
+		//找到之前添加的对应条目
 		if previousEntry, err := s.entries.Get(int(previousIndex)); err == nil {
+			//将其对应的bytes queue内存空间清空
 			resetHashFromEntry(previousEntry)
-			//remove hashkey
+			//并且将其从hashmap中也删除 索引和数据都删除
 			delete(s.hashmap, hashedKey)
 		}
 	}
@@ -148,9 +152,11 @@ func (s *cacheShard) set(key string, hashedKey uint64, entry []byte) error {
 		}
 	}
 
+	//将要插入的键值对包装为一个条目
 	w := wrapEntry(currentTimestamp, hashedKey, key, entry, &s.entryBuffer)
 
 	for {
+		//插入成功 在哈希表中也插入对应的索引
 		if index, err := s.entries.Push(w); err == nil {
 			s.hashmap[hashedKey] = uint64(index)
 			s.lock.Unlock()
@@ -339,9 +345,10 @@ func (s *cacheShard) copyHashedKeys() (keys []uint64, next int) {
 	return keys, next
 }
 
-func (s *cacheShard) removeOldestEntry(reason RemoveReason) error {
-	oldest, err := s.entries.Pop()
-	if err == nil {
+// 删除最久的条目
+func (s *cacheShard) removeOldestEntry(reason RemoveReason) (err error) {
+	var oldest []byte
+	if oldest, err = s.entries.Pop(); err == nil {
 		hash := readHashFromEntry(oldest)
 		if hash == 0 {
 			// entry has been explicitly deleted with resetHashFromEntry, ignore
