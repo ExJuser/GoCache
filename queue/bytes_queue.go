@@ -26,7 +26,8 @@ var (
 )
 
 type BytesQueue struct {
-	full         bool
+	full bool
+	//真实存储数据的超大[]byte数组
 	array        []byte
 	capacity     int
 	maxCapacity  int
@@ -195,25 +196,29 @@ func (q *BytesQueue) Peek() ([]byte, error) {
 
 func (q *BytesQueue) peek(index int) ([]byte, int, error) {
 	err := q.peekCheckErr(index)
-	if err != nil {
+	if err != nil { //index存在异常
 		return nil, 0, err
 	}
 
+	//对应index的数据在bytes数组中的大小
 	blockSize, n := binary.Uvarint(q.array[index:])
+	//index+n: 越过blocksize字段 从Header开始
+	//index+int(blockSize)：到达末尾
 	return q.array[index+n : index+int(blockSize)], int(blockSize), nil
 }
 
+// 从BytesQueue中返回真实数据的异常处理
 func (q *BytesQueue) peekCheckErr(index int) error {
 
-	if q.count == 0 {
+	if q.count == 0 { //queue为空
 		return errEmptyQueue
 	}
 
-	if index <= 0 {
+	if index <= 0 { //传入index不合法
 		return errInvalidIndex
 	}
 
-	if index >= len(q.array) {
+	if index >= len(q.array) { //传入index不合法
 		return errIndexOutOfBounds
 	}
 	return nil

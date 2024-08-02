@@ -9,13 +9,19 @@ import (
 
 type onRemoveCallback func(wrappedEntry []byte, reason RemoveReason)
 
+// Metadata 包含了一条记录的详细信息
 type Metadata struct {
+	// RequestCount 现阶段只包含了请求次数
 	RequestCount uint32
 }
 
 type cacheShard struct {
-	hashmap     map[uint64]uint64
-	entries     queue.BytesQueue
+	//读写分离结构 hashmap存储一条记录的索引
+	hashmap map[uint64]uint64
+	//entries 存储底层真实数据
+	entries queue.BytesQueue
+
+	//Go自带的map不是并发安全的 读写锁保护hashmap的并发访问
 	lock        sync.RWMutex
 	entryBuffer []byte
 	onRemove    onRemoveCallback
@@ -57,6 +63,7 @@ func (s *cacheShard) getWithInfo(key string, hashedKey uint64) (entry []byte, re
 	return entry, resp, nil
 }
 
+// key是键值对的Key hashKey是对应哈希分片映射到的shard的Key
 func (s *cacheShard) get(key string, hashedKey uint64) ([]byte, error) {
 	s.lock.RLock()
 	wrappedEntry, err := s.getWrappedEntry(hashedKey)
@@ -64,6 +71,8 @@ func (s *cacheShard) get(key string, hashedKey uint64) ([]byte, error) {
 		s.lock.RUnlock()
 		return nil, err
 	}
+	//拆解 wrapperEntry包括了一条记录的完整信息：插入时间戳、hash值、长度、key、value等
+	//如果 key != entryKey 说明发生了碰撞；gocache 不考虑缓存冲突时的解决方案
 	if entryKey := readKeyFromEntry(wrappedEntry); key != entryKey {
 		s.lock.RUnlock()
 		s.collision()
@@ -72,6 +81,7 @@ func (s *cacheShard) get(key string, hashedKey uint64) ([]byte, error) {
 		}
 		return nil, ErrEntryNotFound
 	}
+
 	entry := readEntry(wrappedEntry)
 	s.lock.RUnlock()
 	s.hit(hashedKey)
@@ -80,13 +90,17 @@ func (s *cacheShard) get(key string, hashedKey uint64) ([]byte, error) {
 }
 
 func (s *cacheShard) getWrappedEntry(hashedKey uint64) ([]byte, error) {
+	//找到在 BytesQueue 中的索引
 	itemIndex := s.hashmap[hashedKey]
 
+	//没找到 缓存Miss
 	if itemIndex == 0 {
 		s.miss()
 		return nil, ErrEntryNotFound
 	}
 
+	//在 BytesQueue 中寻找并返回
+	//wrapperEntry包括了一条记录的完整信息：插入时间戳、hash值、长度、key、value等
 	wrappedEntry, err := s.entries.Get(int(itemIndex))
 	if err != nil {
 		s.miss()
@@ -199,7 +213,7 @@ func (s *cacheShard) append(key string, hashedKey uint64, entry []byte) error {
 	s.lock.Lock()
 	wrappedEntry, err := s.getValidWrapEntry(key, hashedKey)
 
-	if err == ErrEntryNotFound {
+	if errors.Is(err, ErrEntryNotFound) {
 		err = s.addNewWithoutLock(key, hashedKey, entry)
 		s.lock.Unlock()
 		return err

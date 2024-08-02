@@ -45,7 +45,9 @@ func appendToWrappedEntry(timestamp uint64, wrappedEntry []byte, entry []byte, b
 	return blob[:blobLength]
 }
 
+// 读出真实的value
 func readEntry(data []byte) []byte {
+	//key的长度
 	length := binary.LittleEndian.Uint16(data[timestampSizeInBytes+hashSizeInBytes:])
 
 	dst := make([]byte, len(data)-int(headersSizeInBytes+length))
@@ -58,9 +60,13 @@ func readTimestampFromEntry(data []byte) uint64 {
 	return binary.LittleEndian.Uint64(data)
 }
 
+// 其实就是读出key
 func readKeyFromEntry(data []byte) string {
+	//在wrapped entry中key的长度
+	//header size + key length => value
 	length := binary.LittleEndian.Uint16(data[timestampSizeInBytes+hashSizeInBytes:])
 
+	//将entry中的key读出
 	dst := make([]byte, length)
 	copy(dst, data[headersSizeInBytes:headersSizeInBytes+length])
 
