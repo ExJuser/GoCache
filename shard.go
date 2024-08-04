@@ -139,7 +139,6 @@ func (s *cacheShard) set(key string, hashedKey uint64, entry []byte) error {
 	if previousIndex := s.hashmap[hashedKey]; previousIndex != 0 {
 		//找到之前添加的对应条目
 		if previousEntry, err := s.entries.Get(int(previousIndex)); err == nil {
-			//将其对应的bytes queue内存空间清空
 			resetHashFromEntry(previousEntry)
 			//并且将其从hashmap中也删除 索引和数据都删除
 			delete(s.hashmap, hashedKey)
@@ -240,7 +239,7 @@ func (s *cacheShard) append(key string, hashedKey uint64, entry []byte) error {
 }
 
 func (s *cacheShard) del(hashedKey uint64) error {
-	// Optimistic pre-check using only readlock
+	// 先加读锁检查是否存在 如果不存在直接返回
 	s.lock.RLock()
 	{
 		itemIndex := s.hashmap[hashedKey]
@@ -259,10 +258,9 @@ func (s *cacheShard) del(hashedKey uint64) error {
 	}
 	s.lock.RUnlock()
 
+	//加上写锁 真的删除：将其从 map 中删除、清空其对应 entry 的 hash 值
 	s.lock.Lock()
 	{
-		// After obtaining the writelock, we need to read the same again,
-		// since the data delivered earlier may be stale now
 		itemIndex := s.hashmap[hashedKey]
 
 		if itemIndex == 0 {

@@ -80,13 +80,13 @@ func (q *BytesQueue) Reset() {
 func (q *BytesQueue) Push(data []byte) (int, error) {
 	neededSize := getNeededSize(len(data))
 
-	if !q.canInsertAfterTail(neededSize) {
-		if q.canInsertBeforeHead(neededSize) {
-			q.tail = leftMarginIndex
+	if !q.canInsertAfterTail(neededSize) { //如果无法插在末尾
+		if q.canInsertBeforeHead(neededSize) { //如果可以插在头部
+			q.tail = leftMarginIndex //插在头部
 		} else if q.capacity+neededSize >= q.maxCapacity && q.maxCapacity > 0 {
 			return -1, &queueError{"Full queue. Maximum size limit reached."}
 		} else {
-			q.allocateAdditionalMemory(neededSize)
+			q.allocateAdditionalMemory(neededSize) //扩容
 		}
 	}
 
@@ -225,16 +225,15 @@ func (q *BytesQueue) peekCheckErr(index int) error {
 }
 
 func (q *BytesQueue) canInsertAfterTail(need int) bool {
-	if q.full {
+	if q.full { //队列已满的情况下不能插在尾部
 		return false
 	}
-	if q.tail >= q.head {
+	if q.tail >= q.head { //
 		return q.capacity-q.tail >= need
 	}
 	return q.head-q.tail == need || q.head-q.tail >= need+minimumHeaderSize
 }
 
-// canInsertBeforeHead returns true if it's possible to insert an entry of size of need before the head of the queue
 func (q *BytesQueue) canInsertBeforeHead(need int) bool {
 	if q.full {
 		return false

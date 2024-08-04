@@ -42,7 +42,7 @@ func NewGoCache(config Config) (*GoCache, error) {
 
 func newGoCache(ctx context.Context, config Config, clock clock) (*GoCache, error) {
 	if !isPowerOfTwo(config.Shards) {
-		return nil, errors.New("Shards number must be power of two")
+		return nil, errors.New("shards number must be power of two")
 	}
 	if config.MaxEntrySize < 0 {
 		return nil, errors.New("MaxEntrySize must be >= 0")
@@ -137,6 +137,7 @@ func (c *GoCache) Append(key string, entry []byte) error {
 	return shard.append(key, hashedKey, entry)
 }
 
+// Delete 删除缓存
 func (c *GoCache) Delete(key string) error {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
