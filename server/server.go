@@ -65,9 +65,7 @@ func main() {
 	r.GET("/api/v1/cache/:key", getCacheHandler)
 	r.PUT("/api/v1/cache/:key", putCacheHandler)
 	r.DELETE("/api/v1/cache/:key", deleteCacheHandler)
-	r.GET("/api/v1/stats", func(c *gin.Context) {
-
-	})
+	r.GET("/api/v1/stats", getStatsHandler)
 
 	strPort := ":" + strconv.Itoa(port)
 	logger.Printf("starting server on :%d", port)
@@ -147,5 +145,19 @@ func deleteCacheHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"code":  http.StatusOK,
 		"value": "缓存删除成功",
+	})
+}
+
+func getStatsHandler(ctx *gin.Context) {
+	log.Print("查询缓存的指标数据")
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": http.StatusOK,
+		"value": gin.H{
+			"hits":          cache.Stats().Hits,
+			"misses":        cache.Stats().Misses,
+			"delete_hits":   cache.Stats().DelHits,
+			"delete_misses": cache.Stats().DelMisses,
+			"collisions":    cache.Stats().Collisions,
+		},
 	})
 }
