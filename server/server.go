@@ -53,24 +53,27 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	logger.Print("cache initialised.")
+	logger.Print("cache初始化成功")
 
 	r := gin.Default()
 	r.Use(func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
-		logger.Printf("%s request to %s took %vns.", c.Request.Method, c.Request.URL, time.Since(start).Nanoseconds())
+		logger.Printf("向 %s 的 %s 请求耗时 %vms.", c.Request.URL, c.Request.Method, time.Since(start).Milliseconds())
 	})
 
 	r.GET("/api/v1/cache/:key", getCacheHandler)
 	r.PUT("/api/v1/cache/:key", putCacheHandler)
 	r.DELETE("/api/v1/cache/:key", deleteCacheHandler)
+
 	r.GET("/api/v1/stats", getStatsHandler)
 
+	r.POST("/api/v1/clear", clearCacheHandler)
+
 	strPort := ":" + strconv.Itoa(port)
-	logger.Printf("starting server on :%d", port)
+	logger.Printf("在 :%d 上启动服务器", port)
 	if err = r.Run(strPort); err != nil {
-		logger.Print("server start failed.")
+		logger.Print("服务器启动失败")
 	}
 }
 
@@ -110,6 +113,7 @@ func putCacheHandler(ctx *gin.Context) {
 			"code":  http.StatusInternalServerError,
 			"value": "服务器内部错误",
 		})
+		return
 	}
 	if err = cache.Set(target, entry); err != nil {
 		log.Print(err)
@@ -117,6 +121,7 @@ func putCacheHandler(ctx *gin.Context) {
 			"code":  http.StatusInternalServerError,
 			"value": "服务器内部错误",
 		})
+		return
 	}
 	log.Printf("成功存储\"%s\":\"%s\"", target, string(entry))
 	ctx.JSON(http.StatusOK, gin.H{
@@ -141,6 +146,7 @@ func deleteCacheHandler(ctx *gin.Context) {
 			"value": "服务器内部错误",
 		})
 		log.Printf("服务器内部错误：%s", err)
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"code":  http.StatusOK,
@@ -159,5 +165,19 @@ func getStatsHandler(ctx *gin.Context) {
 			"delete_misses": cache.Stats().DelMisses,
 			"collisions":    cache.Stats().Collisions,
 		},
+	})
+}
+
+func clearCacheHandler(ctx *gin.Context) {
+	if err := cache.Reset(); err != nil {
+		ctx.JSON(http.StatusOK, gin.H{
+			"code":  http.StatusInternalServerError,
+			"value": "服务器内部错误",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":  http.StatusOK,
+		"value": "成功清空缓存",
 	})
 }
