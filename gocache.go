@@ -14,6 +14,7 @@ type Response struct {
 	EntryStatus RemoveReason
 }
 
+// RemoveReason 被删除的原因
 type RemoveReason uint32
 
 const (
@@ -42,21 +43,23 @@ func NewGoCache(config Config) (*GoCache, error) {
 
 func newGoCache(ctx context.Context, config Config, clock clock) (*GoCache, error) {
 	if !isPowerOfTwo(config.Shards) {
-		return nil, errors.New("shards number must be power of two")
+		//return nil, errors.New("shards number must be power of two")
+		return nil, errors.New("分片数量必须是2的次方个")
 	}
 	if config.MaxEntrySize < 0 {
-		return nil, errors.New("MaxEntrySize must be >= 0")
+		return nil, errors.New("MaxEntrySize 必须为非负数")
 	}
 	if config.MaxEntriesInWindow < 0 {
-		return nil, errors.New("MaxEntriesInWindow must be >= 0")
+		return nil, errors.New("MaxEntriesInWindow 必须为非负数")
 	}
 	if config.HardMaxCacheSize < 0 {
-		return nil, errors.New("HardMaxCacheSize must be >= 0")
+		return nil, errors.New("HardMaxCacheSize 必须为非负数")
 	}
 
 	lifeWindowSeconds := uint64(config.LifeWindow.Seconds())
+	//默认一秒钟清理一次 此时过期时间必须大于一秒 否则每次清理都需要清空全部
 	if config.CleanWindow > 0 && lifeWindowSeconds == 0 {
-		return nil, errors.New("LifeWindow must be >= 1s when CleanWindow is set")
+		return nil, errors.New("LifeWindow必须大于等于CleanWindow")
 	}
 
 	if config.Hasher == nil {
@@ -69,7 +72,7 @@ func newGoCache(ctx context.Context, config Config, clock clock) (*GoCache, erro
 		clock:      clock,
 		hash:       config.Hasher,
 		config:     config,
-		shardMask:  uint64(config.Shards - 1),
+		shardMask:  uint64(config.Shards - 1), //位运算(替代取模)得到所在分片时使用
 		close:      make(chan struct{}),
 	}
 
@@ -88,6 +91,7 @@ func newGoCache(ctx context.Context, config Config, clock clock) (*GoCache, erro
 		cache.shards[i] = initNewShard(config, onRemove, clock)
 	}
 
+	//启动异步协程定时清理缓存
 	if config.CleanWindow > 0 {
 		go func() {
 			ticker := time.NewTicker(config.CleanWindow)
@@ -113,6 +117,7 @@ func (c *GoCache) Close() error {
 	return nil
 }
 
+// Get 获取缓存
 func (c *GoCache) Get(key string) ([]byte, error) {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
@@ -125,6 +130,7 @@ func (c *GoCache) GetWithInfo(key string) ([]byte, Response, error) {
 	return shard.getWithInfo(key, hashedKey)
 }
 
+// Set 设置缓存
 func (c *GoCache) Set(key string, entry []byte) error {
 	hashedKey := c.hash.Sum64(key)
 	shard := c.getShard(hashedKey)
@@ -162,6 +168,7 @@ func (c *GoCache) ResetStats() error {
 	return nil
 }
 
+// Len 长度定义为每一个分片的hashmap的len之和 即共有多少条有效条目
 func (c *GoCache) Len() int {
 	var length int
 	for _, shard := range c.shards {
@@ -178,6 +185,7 @@ func (c *GoCache) Capacity() int {
 	return length
 }
 
+// Stats 遍历每一个分片 累加stats信息
 func (c *GoCache) Stats() Stats {
 	var s Stats
 	for _, shard := range c.shards {
@@ -219,6 +227,7 @@ func (c *GoCache) cleanUp(currentTimestamp uint64) {
 	}
 }
 
+// 由于限制了分片数量为2的次方 此处取模操作可以换成位运算
 func (c *GoCache) getShard(hashedKey uint64) (shard *cacheShard) {
 	return c.shards[hashedKey&c.shardMask]
 }
