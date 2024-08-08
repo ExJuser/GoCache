@@ -151,7 +151,7 @@ func (s *cacheShard) set(key string, hashedKey uint64, entry []byte) error {
 		}
 	}
 
-	//将要插入的键值对包装为一个条目
+	//将要插入的键值对包装为一个条目 此时还不包括最头部的block size
 	w := wrapEntry(currentTimestamp, hashedKey, key, entry, &s.entryBuffer)
 
 	for {
@@ -161,6 +161,7 @@ func (s *cacheShard) set(key string, hashedKey uint64, entry []byte) error {
 			s.lock.Unlock()
 			return nil
 		}
+		//插入失败就尝试删除一个最老的entry 再次尝试插入直到能够成功插入
 		if s.removeOldestEntry(NoSpace) != nil {
 			s.lock.Unlock()
 			return errors.New("entry is bigger than max shard size")

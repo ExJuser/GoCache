@@ -131,6 +131,8 @@ func (q *BytesQueue) allocateAdditionalMemory(minimum int) {
 }
 
 func (q *BytesQueue) push(data []byte, len int) {
+	//计算出插入这条数据所需要的长度 放在每个entry的最前面
+	//读取entry时也先读取这一个长度 然后向后偏移这段长度就能得到entry本体：header+载体部分（key+value）
 	headerEntrySize := binary.PutUvarint(q.headerBuffer, uint64(len))
 	q.copy(q.headerBuffer, headerEntrySize)
 
