@@ -211,9 +211,11 @@ func (c *GoCache) Iterator() *EntryInfoIterator {
 
 func (c *GoCache) onEvict(oldestEntry []byte, currentTimestamp uint64, evict func(reason RemoveReason) error) bool {
 	oldestTimestamp := readTimestampFromEntry(oldestEntry)
-	if currentTimestamp < oldestTimestamp {
+	//插入时间大于当前时间 实际上是在触发了过期清理之后才添加的
+	if oldestTimestamp > currentTimestamp {
 		return false
 	}
+	//当前时间-插入时间超过了清理窗口 认为已经过期
 	if currentTimestamp-oldestTimestamp > c.lifeWindow {
 		evict(Expired)
 		return true

@@ -47,7 +47,7 @@ func appendToWrappedEntry(timestamp uint64, wrappedEntry []byte, entry []byte, b
 
 // 读出真实的value
 func readEntry(data []byte) []byte {
-	//key的长度
+	//key length
 	length := binary.LittleEndian.Uint16(data[timestampSizeInBytes+hashSizeInBytes:])
 
 	dst := make([]byte, len(data)-int(headersSizeInBytes+length))

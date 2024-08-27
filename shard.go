@@ -68,21 +68,26 @@ func (s *cacheShard) getWithInfo(key string, hashedKey uint64) (entry []byte, re
 func (s *cacheShard) get(key string, hashedKey uint64) ([]byte, error) {
 	s.lock.RLock()
 	wrappedEntry, err := s.getWrappedEntry(hashedKey)
+	//如果获取entry过程中出现错误 直接返回
 	if err != nil {
 		s.lock.RUnlock()
 		return nil, err
 	}
-	//拆解 wrapperEntry包括了一条记录的完整信息：插入时间戳、hash值、长度、key、value等
+
+	//拆解 wrapperEntry
+	//entry 包括了一条记录的完整信息：插入时间戳、hash值、长度、key、value等
 	//如果 key != entryKey 说明发生了碰撞；gocache 不考虑缓存冲突时的解决方案
 	if entryKey := readKeyFromEntry(wrappedEntry); key != entryKey {
 		s.lock.RUnlock()
+		//记录一次冲突
 		s.collision()
-		if s.isVerbose {
+		if s.isVerbose { //verbose代表打印日志
 			s.logger.Printf("Collision detected. Both %q and %q have the same hash %x", key, entryKey, hashedKey)
 		}
 		return nil, ErrEntryNotFound
 	}
 
+	//entry只包括value
 	entry := readEntry(wrappedEntry)
 	s.lock.RUnlock()
 	s.hit(hashedKey)
@@ -91,7 +96,7 @@ func (s *cacheShard) get(key string, hashedKey uint64) ([]byte, error) {
 }
 
 func (s *cacheShard) getWrappedEntry(hashedKey uint64) ([]byte, error) {
-	//找到在 BytesQueue 中的索引
+	//找到在 BytesQueue 底层 bytes 切片中的索引
 	itemIndex := s.hashmap[hashedKey]
 
 	//没找到 缓存Miss
@@ -131,15 +136,17 @@ func (s *cacheShard) getValidWrapEntry(key string, hashedKey uint64) ([]byte, er
 }
 
 func (s *cacheShard) set(key string, hashedKey uint64, entry []byte) error {
+	//记录插入时的时间戳
 	currentTimestamp := uint64(s.clock.Epoch())
 
 	s.lock.Lock()
 
-	//对应的hashedKey在hashmap中已经存在 之前已经添加过
+	//对应的hashedKey在hashmap中已经存在 说明之前已经添加过 发生了碰撞
 	if previousIndex := s.hashmap[hashedKey]; previousIndex != 0 {
 		//找到之前添加的对应条目
 		if previousEntry, err := s.entries.Get(int(previousIndex)); err == nil {
 			resetHashFromEntry(previousEntry)
+			//gocache不考虑这种情况下的处理
 			//并且将其从hashmap中也删除 索引和数据都删除
 			delete(s.hashmap, hashedKey)
 		}
@@ -251,6 +258,7 @@ func (s *cacheShard) del(hashedKey uint64) error {
 			return ErrEntryNotFound
 		}
 
+		//如果err不为nil 说明传入的index是不合法的
 		if err := s.entries.CheckGet(int(itemIndex)); err != nil {
 			s.lock.RUnlock()
 			s.delmiss()
@@ -259,11 +267,12 @@ func (s *cacheShard) del(hashedKey uint64) error {
 	}
 	s.lock.RUnlock()
 
-	//加上写锁 真的删除：将其从 map 中删除、清空其对应 entry 的 hash 值
+	//加上写锁 真的删除：将其从 map 中删除、并清空其对应 entry 的 hash 值
 	s.lock.Lock()
 	{
 		itemIndex := s.hashmap[hashedKey]
 
+		//不存在
 		if itemIndex == 0 {
 			s.lock.Unlock()
 			s.delmiss()
@@ -300,7 +309,7 @@ func (s *cacheShard) onEvict(oldestEntry []byte, currentTimestamp uint64, evict 
 
 func (s *cacheShard) isExpired(oldestEntry []byte, currentTimestamp uint64) bool {
 	oldestTimestamp := readTimestampFromEntry(oldestEntry)
-	if currentTimestamp <= oldestTimestamp { // if currentTimestamp < oldestTimestamp, the result will out of uint64 limits;
+	if currentTimestamp <= oldestTimestamp {
 		return false
 	}
 	return currentTimestamp-oldestTimestamp > s.lifeWindow
